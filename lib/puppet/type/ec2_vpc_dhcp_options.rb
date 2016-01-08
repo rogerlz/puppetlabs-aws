@@ -67,7 +67,7 @@ Puppet::Type.newtype(:ec2_vpc_dhcp_options) do
     end
   end
 
-  newproperty(:netbios_node_type) do
+  newparam(:netbios_node_type) do
     desc 'The netbios node type, defaults to 2.'
     defaultto '2'
     munge do |value|

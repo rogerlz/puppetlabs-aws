@@ -91,25 +91,19 @@ Puppet::Type.newtype(:elb_loadbalancer) do
     end
   end
 
-  validate do
-    subnets = self[:subnets]
-    zones = self[:availability_zones]
-    fail "You can specify either subnets or availability_zones for the ELB #{self[:name]}" if !zones.empty? && !subnets.empty?
-  end
 
-  autorequire(:ec2_instance) do
-    instances = self[:instances]
-    instances.is_a?(Array) ? instances : [instances]
-  end
-
-  autorequire(:ec2_securitygroup) do
-    groups = self[:security_groups]
-    groups.is_a?(Array) ? groups : [groups]
-  end
-
-  autorequire(:ec2_vpc_subnet) do
-    subnets = self[:subnets]
-    subnets.is_a?(Array) ? subnets : [subnets]
+  newproperty(:health_check) do
+    desc 'Health check.'
+    def insync?(is)
+      normalise(is).to_set == normalise(should).to_set
+    end
+    def normalise(value)
+      value.each { |k,v| value[k] = v.to_s }
+      Hash[value.sort]
+    end
+    validate do |value|
+      fail 'health check should be a Hash' unless value.is_a?(Hash)
+    end
   end
 
 end

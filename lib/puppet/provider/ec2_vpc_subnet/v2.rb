@@ -103,10 +103,14 @@ Puppet::Type.type(:ec2_vpc_subnet).provide(:v2, :parent => PuppetX::Puppetlabs::
   end
 
   def destroy
-    Puppet.info("Deleting subnet #{name} in #{target_region}")
-    ec2_client(target_region).delete_subnet(
-      subnet_id: @property_hash[:id]
-    )
+    begin
+      Puppet.info("Deleting subnet #{name} in #{target_region}")
+      ec2_client(target_region).delete_subnet(
+        subnet_id: @property_hash[:id]
+      )
+    rescue
+      Puppet.info("Unable to delete subnet #{name} in #{target_region}. Will retry")
+    end
     @property_hash[:ensure] = :absent
   end
 end

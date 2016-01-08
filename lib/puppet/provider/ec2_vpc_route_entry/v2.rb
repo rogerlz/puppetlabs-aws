@@ -1,17 +1,16 @@
 require_relative '../../../puppet_x/puppetlabs/aws.rb'
 
-Puppet::Type.type(:ec2_vpc_routetable).provide(:v2, :parent => PuppetX::Puppetlabs::Aws) do
+Puppet::Type.type(:ec2_vpc_route_entry).provide(:v2, :parent => PuppetX::Puppetlabs::Aws) do
   confine feature: :aws
   confine feature: :retries
 
   mk_resource_methods
-  remove_method :tags=
 
   def self.instances
     regions.collect do |region|
       begin
-        response = ec2_client(region).describe_route_tables()
-        tables = []
+        response = ec2_client(region).describe_route_table()
+        table = []
         response.data.route_tables.each do |table|
           hash = route_table_to_hash(region, table)
           tables << new(hash) if has_name?(hash)
@@ -23,11 +22,9 @@ Puppet::Type.type(:ec2_vpc_routetable).provide(:v2, :parent => PuppetX::Puppetla
     end.flatten
   end
 
-  read_only(:region, :vpc, :routes)
-
   def self.prefetch(resources)
     instances.each do |prov|
-      if resource = resources[prov.name] # rubocop:disable Lint/AssignmentInCondition
+      if resource = resources[prov.name]
         resource.provider = prov if resource[:region] == prov.region
       end
     end
@@ -43,9 +40,7 @@ Puppet::Type.type(:ec2_vpc_routetable).provide(:v2, :parent => PuppetX::Puppetla
   #  gateway_name.nil? ? nil : hash
   #end
 
-  def self.route_table_to_hash(region, table)
-    name = name_from_tag(table)
-    return {} unless name
+  def self.route_to_hash(region, route)
     # FIXME
     #routes = table.routes.collect do |route|
     #  route_to_hash(region, route)
@@ -62,45 +57,35 @@ Puppet::Type.type(:ec2_vpc_routetable).provide(:v2, :parent => PuppetX::Puppetla
   end
 
   def exists?
-    Puppet.info("Checking if Route table #{name} exists in #{target_region}")
+    Puppet.info("Checking if Route entry #{destination_cidr_block} exists in #{route_table}")
     @property_hash[:ensure] == :present
   end
 
   def create
-    Puppet.info("Creating Route table #{name} in #{target_region}")
+    Puppet.info("Creating Route entry #{destination_cidr_block} in #{route_table}")
     ec2 = ec2_client(target_region)
 
-    routes = resource[:routes]
-    routes = [routes] unless routes.is_a?(Array)
+    gateway = resource[:gateway]
 
-    vpc_response = ec2.describe_vpcs(filters: [
-      {name: "tag:Name", values: [resource[:vpc]]},
+    internet_gateway_response = ec2.describe_internet_gateways(filters: [
+      {name: 'tag:Name', values: [gateway]},
     ])
-    fail "Multiple VPCs with name #{resource[:vpc]}" if vpc_response.data.vpcs.count > 1
-    fail "No VPCs with name #{resource[:vpc]}" if vpc_response.data.vpcs.empty?
+    found_internet_gateway = !internet_gateway_response.data.internet_gateways.empty?
 
-    response = ec2.create_route_table(
-      vpc_id: vpc_response.data.vpcs.first.vpc_id,
-    )
-    id = response.data.route_table.route_table_id
-    with_retries(:max_tries => 5) do
-      ec2.create_tags(
-        resources: [id],
-        tags: tags_for_resource,
-      )
-    end
-    routes.each do |route|
-      internet_gateway_response = ec2.describe_internet_gateways(filters: [
-        {name: 'tag:Name', values: [route['gateway']]},
+    unless found_internet_gateway
+      vpn_gateway_response = ec2.describe_vpn_gateways(filters: [
+        {name: 'tag:Name', values: [gateway]},
       ])
-      found_internet_gateway = !internet_gateway_response.data.internet_gateways.empty?
+      found_vpn_gateway = !vpn_gateway_response.data.vpn_gateways.empty?
+    end
 
-      unless found_internet_gateway
-        vpn_gateway_response = ec2.describe_vpn_gateways(filters: [
-          {name: 'tag:Name', values: [route['gateway']]},
-        ])
-        found_vpn_gateway = !vpn_gateway_response.data.vpn_gateways.empty?
-      end
+    unless found_vpn_gateway
+      # lookup for peering_connection
+      peering_connection_response = ec2.describe_vpc_peering_connection(filters: [
+        {name: 'tag:Name', values: [gateway]},
+      ])
+      found_peering_connection = !peering_connection_response.data.vpc_peering_connections.empty?
+    end
 
       gateway_id = if found_internet_gateway
                      internet_gateway_response.data.internet_gateways.first.internet_gateway_id
@@ -110,18 +95,35 @@ Puppet::Type.type(:ec2_vpc_routetable).provide(:v2, :parent => PuppetX::Puppetla
                      nil
                    end
 
+      peering_id  = if not gateway_id and found_peering_connection
+                      found_peering_connection.data.vpc_peering_connections.first.vpc_peering_connection_id
+                    else
+                      nil
+                    end
+
       ec2.create_route(
         route_table_id: id,
         destination_cidr_block: route['destination_cidr_block'],
         gateway_id: gateway_id,
       ) if gateway_id
+
+      ec2_create_route(
+        route_table_id: id,
+        destination_cidr_block: route['destination_cidr_block'],
+        vpc_peering_connection_id: peering_id,
+      ) if peering_id
+
+
     end
     @property_hash[:ensure] = :present
   end
 
   def destroy
-    Puppet.info("Deleting Route table #{name} in #{target_region}")
-    ec2_client(target_region).delete_route_table(route_table_id: @property_hash[:id])
+    Puppet.info("Deleting Route entry #{destination_cidr_block} in #{route_table}")
+    ec2_client(target_region).delete_route(
+      route_table_id:
+      destination_cidr_block: @property_hash[:destination_cidr_block]
+    )
     @property_hash[:ensure] = :absent
   end
 end

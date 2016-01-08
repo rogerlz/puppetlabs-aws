@@ -40,9 +40,6 @@ module PuppetX
           end
         end
 
-        autorequire(:route53_zone) do
-          self[:zone]
-        end
       end
     end
   end

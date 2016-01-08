@@ -23,7 +23,7 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
   read_only(:iops, :master_username, :multi_az, :license_model,
             :db_name, :region, :db_instance_class, :availability_zone,
             :engine, :engine_version, :allocated_storage, :storage_type,
-            :db_security_groups, :db_parameter_group, :backup_retention_period, :db_subnet)
+            :db_security_groups, :db_parameter_group, :backup_retention_period, :db_subnet, :character_set_name, :vpc_security_groups)
 
   def self.prefetch(resources)
     instances.each do |prov|
@@ -34,6 +34,14 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
   end
 
   def self.db_instance_to_hash(region, instance)
+    vpc_security_group_names = []
+    unless instance.vpc_security_groups.nil? || instance.vpc_security_groups.empty?
+      ids = instance.vpc_security_groups.collect(&:vpc_security_group_id)
+      filters = [{name: 'group-id', values: ids}]
+      response = ec2_client(region).describe_security_groups(filters: filters)
+      vpc_security_group_names = response.data.security_groups.map(&:group_name)
+    end
+
     db_subnet = instance.db_subnet_group ? instance.db_subnet_group.db_subnet_group_name : nil
     config = {
       ensure: :present,
@@ -52,7 +60,9 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
       db_subnet: db_subnet,
       db_parameter_group: instance.db_parameter_groups.collect(&:db_parameter_group_name).first,
       db_security_groups: instance.db_security_groups.collect(&:db_security_group_name),
-      backup_retention_period: instance.backup_retention_period
+      backup_retention_period: instance.backup_retention_period,
+      character_set_name: instance.character_set_name,
+      vpc_security_groups: vpc_security_group_names,
     }
     if instance.respond_to?('endpoint') && !instance.endpoint.nil?
       config[:endpoint] = instance.endpoint.address
@@ -86,6 +96,8 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
       db_security_groups: resource[:db_security_groups],
       db_parameter_group_name: resource[:db_parameter_group],
       backup_retention_period: resource[:backup_retention_period],
+      character_set_name: resource[:character_set_name],
+      vpc_security_group_ids: security_group_ids_from_names(resource[:vpc_security_groups])
     }
 
     rds_client(resource[:region]).create_db_instance(config)
@@ -108,4 +120,14 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
     @property_hash[:ensure] = :absent
   end
 
+  def security_group_ids_from_names(names)
+    unless names.nil? || names.empty?
+      filters = [{name: 'group-name', values: names}]
+      names = [names] unless names.is_a?(Array)
+      response = ec2_client(resource[:region]).describe_security_groups(filters: filters)
+      response.data.security_groups.map(&:group_id)
+    else
+      []
+    end
+  end
 end

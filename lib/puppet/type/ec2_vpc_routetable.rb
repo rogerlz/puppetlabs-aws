@@ -28,13 +28,15 @@ Puppet::Type.newtype(:ec2_vpc_routetable) do
     end
   end
 
-  newproperty(:routes, :array_matching => :all) do
+  # FIXME (should be property)
+  newparam(:routes, :array_matching => :all) do
     desc 'Individual routes for the routing table.'
-    validate do |value|
-      ['destination_cidr_block', 'gateway'].each do |key|
-        fail "routes must include a #{key}" unless value.keys.include?(key)
-      end
-    end
+    # FIXME
+    #validate do |value|
+    #  ['destination_cidr_block', 'gateway'].each do |key|
+    #    fail "routes must include a #{key}" unless value.keys.include?(key)
+    #  end
+    #end
     def insync?(is)
       is.to_set == should.to_set
     end
@@ -52,20 +54,6 @@ Puppet::Type.newtype(:ec2_vpc_routetable) do
       fail 'Only one route per gateway allowed' unless uniq_gateways.size == Array(routes).size
       fail 'destination_cidr_block must be unique' unless uniq_blocks.size == Array(routes).size
     end
-  end
-
-  autorequire(:ec2_vpc_vpn_gateway) do
-    routes = self[:routes]
-    routes ? Array(routes).collect { |route| route['gateway'] } : nil
-  end
-
-  autorequire(:ec2_vpc_internet_gateway) do
-    routes = self[:routes]
-    routes ? Array(routes).collect { |route| route['gateway'] } : nil
-  end
-
-  autorequire(:ec2_vpc) do
-    self[:vpc]
   end
 
 end

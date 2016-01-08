@@ -41,7 +41,7 @@ Puppet::Type.newtype(:ec2_securitygroup) do
     desc 'the tags for the security group'
   end
 
-  newproperty(:description) do
+  newparam(:description) do
     desc 'a short description of the group'
     validate do |value|
       fail 'description cannot be blank' if value == ''
@@ -68,7 +68,4 @@ Puppet::Type.newtype(:ec2_securitygroup) do
     end
   end
 
-  autorequire(:ec2_vpc) do
-    self[:vpc]
-  end
 end

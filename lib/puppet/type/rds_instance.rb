@@ -66,7 +66,7 @@ Not applicable. Must be null.'
     end
   end
 
-  newproperty(:availability_zone) do
+  newparam(:availability_zone) do
     desc 'The availability zone in which to place the instance.'
     validate do |value|
       fail 'availability_zone should be a String' unless value.is_a?(String)
@@ -142,7 +142,7 @@ Not applicable. Must be null.'
     end
   end
 
-  newproperty(:multi_az) do
+  newparam(:multi_az) do
     desc 'Define a multi-az.'
     defaultto :false
     newvalues(:false, :'false', :'true')
@@ -167,6 +167,13 @@ Not applicable. Must be null.'
     desc 'The connection endpoint for the database.'
     validate do |value|
       fail 'endpoint is read-only'
+    end
+  end
+
+  newproperty(:vpc_security_groups, :array_matching => :all) do
+    desc 'The VPC security groups to associate the instance.'
+    validate do |value|
+      fail 'vpc_security_groups should be a String' unless value.is_a?(String)
     end
   end
 
@@ -209,9 +216,11 @@ Not applicable. Must be null.'
     end
   end
 
-  autorequire(:rds_db_securitygroup) do
-    groups = self[:db_security_groups]
-    groups.is_a?(Array) ? groups : [groups]
+  newparam(:character_set_name) do
+    desc 'Charset'
+    validate do |value|
+      fail 'character_set_name should be a String' unless value.is_a?(String)
+    end
   end
 
 end

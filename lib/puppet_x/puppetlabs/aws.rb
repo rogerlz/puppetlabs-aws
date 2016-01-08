@@ -26,6 +26,8 @@ This could be because some other process is modifying AWS at the same time."""
       def self.regions
         if ENV['AWS_REGION'] and not ENV['AWS_REGION'].empty?
           [ENV['AWS_REGION']]
+        elsif region_from_global_configuration
+          [region_from_global_configuration]
         else
           ec2_client(default_region).describe_regions.data.regions.map(&:region_name)
         end
@@ -84,7 +86,7 @@ This could be because some other process is modifying AWS at the same time."""
       def self.global_configuration
         Puppet.initialize_settings unless Puppet[:confdir]
         path = File.join(Puppet[:confdir], 'puppetlabs_aws_configuration.ini')
-        File.exists?(path) ? parse_ini(File.new(path)) : nil
+        File.exists?(path) ? ini_parse(File.new(path)) : nil
       end
 
       def self.region_from_global_configuration
@@ -189,7 +191,7 @@ This could be because some other process is modifying AWS at the same time."""
       end
 
       def self.rds_client(region = default_region)
-        ::Aws::RDS::Client.new({region: region})
+        ::Aws::RDS::Client.new(client_config(region))
       end
 
       def sqs_client(region = default_region)
@@ -318,7 +320,7 @@ This could be because some other process is modifying AWS at the same time."""
         @gateways ||= Hash.new do |h, key|
           h[key] = if key == 'local'
             'local'
-          else
+          elsif key
             begin
               igw_response = ec2.describe_internet_gateways(internet_gateway_ids: [key])
               name_from_tag(igw_response.data.internet_gateways.first)
@@ -330,6 +332,8 @@ This could be because some other process is modifying AWS at the same time."""
                 nil
               end
             end
+          else
+            nil
           end
         end
         @gateways[gateway_id]

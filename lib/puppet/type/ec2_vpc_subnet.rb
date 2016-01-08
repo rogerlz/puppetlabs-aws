@@ -46,7 +46,7 @@ Puppet::Type.newtype(:ec2_vpc_subnet) do
     desc 'Tags to assign to the subnet.'
   end
 
-  newproperty(:route_table) do
+  newparam(:route_table) do
     desc 'The route table to attach to the subnet.'
     validate do |value|
       fail 'route_table should be a String' unless value.is_a?(String)
@@ -62,11 +62,4 @@ Puppet::Type.newtype(:ec2_vpc_subnet) do
     end
   end
 
-  autorequire(:ec2_vpc) do
-    self[:vpc]
-  end
-
-  autorequire(:ec2_vpc_routetable) do
-    self[:route_table]
-  end
 end

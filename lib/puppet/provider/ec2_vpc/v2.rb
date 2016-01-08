@@ -34,6 +34,19 @@ Puppet::Type.type(:ec2_vpc).provide(:v2, :parent => PuppetX::Puppetlabs::Aws) do
   end
 
   def self.vpc_to_hash(region, vpc)
+    response = ec2_client(region).describe_vpc_attribute(
+      vpc_id: vpc.vpc_id,
+      attribute: 'enableDnsHostnames'
+    )
+    dns_hostnames = response.enable_dns_hostnames.value
+
+    response = ec2_client(region).describe_vpc_attribute(
+      vpc_id: vpc.vpc_id,
+      attribute: 'enableDnsSupport'
+    )
+    dns_support = response.enable_dns_support.value
+
+
     name = name_from_tag(vpc)
     return {} unless name
     {
@@ -45,6 +58,8 @@ Puppet::Type.type(:ec2_vpc).provide(:v2, :parent => PuppetX::Puppetlabs::Aws) do
       region: region,
       tags: tags_for(vpc),
       dhcp_options: options_name_from_id(region, vpc.dhcp_options_id),
+      enable_dns_support: dns_support,
+      enable_dns_hostnames: dns_hostnames,
     }
   end
 
@@ -76,6 +91,31 @@ Puppet::Type.type(:ec2_vpc).provide(:v2, :parent => PuppetX::Puppetlabs::Aws) do
         vpc_id: vpc_id,
       )
     end
+
+    vpc_attribute = resource[:enable_dns_hostnames]
+    if not vpc_attribute.nil?
+      value = vpc_attribute == :true ? true : false
+      puts "hostnames"
+      ec2.modify_vpc_attribute(
+        vpc_id: vpc_id,
+        enable_dns_hostnames: {
+          value: value,
+        },
+    )
+    end
+
+    vpc_attribute = resource[:enable_dns_support]
+    if not vpc_attribute.nil?
+      value = vpc_attribute == :true ? true : false
+      puts "support"
+      ec2.modify_vpc_attribute(
+        vpc_id: vpc_id,
+        enable_dns_support: {
+          value: value,
+        },
+      )
+    end
+
 
     # When creating a VPC a Route Table is automatically created
     # We want to name to the same as the VPC so we can find it later

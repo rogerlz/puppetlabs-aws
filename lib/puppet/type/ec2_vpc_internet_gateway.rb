@@ -32,7 +32,4 @@ Puppet::Type.newtype(:ec2_vpc_internet_gateway) do
     end
   end
 
-  autorequire(:ec2_vpc) do
-    self[:vpc]
-  end
 end
