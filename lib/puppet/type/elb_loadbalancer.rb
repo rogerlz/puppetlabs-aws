@@ -46,6 +46,13 @@ Puppet::Type.newtype(:elb_loadbalancer) do
     desc 'The tags for the load balancer.'
   end
 
+  newproperty(:endpoint) do
+    desc 'The connection endpoint for the load balancer.'
+    validate do |value|
+      fail 'endpoint is read-only'
+    end
+  end
+
   newproperty(:subnets, :array_matching => :all) do
     defaultto []
     desc 'The region in which to launch the load balancer.'

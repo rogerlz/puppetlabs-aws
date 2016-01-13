@@ -22,7 +22,7 @@ Puppet::Type.type(:elb_loadbalancer).provide(:v2, :parent => PuppetX::Puppetlabs
     end.flatten
   end
 
-  read_only(:region, :scheme, :availability_zones, :listeners, :tags, :instances)
+  read_only(:region, :scheme, :availability_zones, :listeners, :instances)
 
   def self.prefetch(resources)
     instances.each do |prov|
@@ -89,7 +89,7 @@ Puppet::Type.type(:elb_loadbalancer).provide(:v2, :parent => PuppetX::Puppetlabs
       group_response = ec2_client(region).describe_security_groups(group_ids: load_balancer.security_groups)
       security_group_names = group_response.data.security_groups.collect(&:group_name)
     end
-    {
+    config = {
       name: load_balancer.load_balancer_name,
       ensure: :present,
       region: region,
@@ -102,6 +102,10 @@ Puppet::Type.type(:elb_loadbalancer).provide(:v2, :parent => PuppetX::Puppetlabs
       scheme: load_balancer.scheme,
       health_check: health_check,
     }
+    if load_balancer.respond_to?('dns_name') && !load_balancer.dns_name.nil?
+      config[:endpoint] = load_balancer.dns_name
+    end
+    config
   end
 
   def exists?
@@ -231,6 +235,20 @@ Puppet::Type.type(:elb_loadbalancer).provide(:v2, :parent => PuppetX::Puppetlabs
         healthy_threshold: value['healthy_threshold'],
       },
     })
+  end
+
+  def tags=(value)
+     Puppet.info("Updating tags for #{name} in region #{target_region}")
+     elb = elb_client(resource[:region])
+     elb.add_tags(
+       load_balancer_names: [@property_hash[:name]],
+       tags: value.collect { |k,v| { :key => k, :value => v } }
+     ) unless value.empty?
+     missing_tags = tags.keys - value.keys
+     elb.remove_tags(
+       load_balancer_names: [@property_hash[:name]],
+       tags: missing_tags.collect { |k| { :key => k } }
+     ) unless missing_tags.empty?
   end
 
   def destroy
