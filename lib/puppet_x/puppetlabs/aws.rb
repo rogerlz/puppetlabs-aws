@@ -295,6 +295,19 @@ This could be because some other process is modifying AWS at the same time."""
         @vpn_gateways[gateway_id]
       end
 
+      def self.vpc_peering_name_from_id(region, gateway_id)
+        ec2 = ec2_client(region)
+        @vpc_peerings ||= Hash.new do |h, key|
+          h[key] = if key
+            response = ec2.describe_vpc_peering_connections(vpc_peering_connection_ids: [key])
+            name_from_tag(response.data.vpc_peering_connections.first)
+          else
+            nil
+          end
+        end
+        @vpc_peerings[gateway_id]
+      end
+
       def self.options_name_from_id(region, options_id)
         ec2 = ec2_client(region)
         @dhcp_options ||= Hash.new do |h, key|

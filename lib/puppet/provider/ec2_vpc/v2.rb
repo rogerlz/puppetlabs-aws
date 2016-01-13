@@ -46,7 +46,6 @@ Puppet::Type.type(:ec2_vpc).provide(:v2, :parent => PuppetX::Puppetlabs::Aws) do
     )
     dns_support = response.enable_dns_support.value
 
-
     name = name_from_tag(vpc)
     return {} unless name
     {
