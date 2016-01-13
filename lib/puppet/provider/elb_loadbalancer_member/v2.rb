@@ -86,21 +86,11 @@ Puppet::Type.type(:elb_loadbalancer_member).provide(:v2, :parent => PuppetX::Pup
 
     Puppet.debug("Aws::Elb_instance_member -> Adding instance #{ec2_name} to load balancer #{elb_name} in region #{target_region}")
 
-    response = ec2_client(region).describe_instances(
-      filters: [
-        {name: 'tag:Name', values: [ec2_name]},
-        {name: 'instance-state-name', values: ['pending', 'running']}
-      ]
-    )
-
-    instance_id = response.reservations.map(&:instances).flatten.map(&:instance_id)
-    instance_input = instance_id.collect do |id|
-        { instance_id: id }
-    end
+    instance_id = ec2_instance_ids_from_name(ec2_name)
 
     elb_client(region).register_instances_with_load_balancer(
       load_balancer_name: elb_name,
-      instances: instance_input
+      instances: instance_id
     )
 
     @property_hash[:ensure] = :present
@@ -110,9 +100,26 @@ Puppet::Type.type(:elb_loadbalancer_member).provide(:v2, :parent => PuppetX::Pup
     ec2_name = resource[:name].split(':')[1]
     elb_name = resource[:name].split(':')[0]
 
-   response = ec2_client(region).describe_instances(
+    instance_id = ec2_instance_ids_from_name(ec2_name)
+
+    Puppet.debug("Aws::Elb_instance_member -> Removing instance #{ec2_name} from load balancer #{elb_name} in region #{target_region}")
+    elb_client(target_region).deregister_instances_from_load_balancer(
+      load_balancer_name: elb_name,
+      instances: instance_id
+    )
+    @property_hash[:ensure] = :absent
+  end
+
+  def ec2_instance_ids_from_name(names)
+    unless names.nil? || names.empty?
+      names = [names] unless names.is_a?(Array)
+    else
+      nil
+    end
+
+    response = ec2_client(resource[:region]).describe_instances(
       filters: [
-        {name: 'tag:Name', values: [ec2_name]},
+        {name: 'tag:Name', values: names},
         {name: 'instance-state-name', values: ['pending', 'running']}
       ]
     )
@@ -121,12 +128,6 @@ Puppet::Type.type(:elb_loadbalancer_member).provide(:v2, :parent => PuppetX::Pup
     instance_input = instance_id.collect do |id|
         { instance_id: id }
     end
-
-    Puppet.debug("Aws::Elb_instance_member -> Removing instance #{ec2_name} from load balancer #{elb_name} in region #{target_region}")
-    elb_client(target_region).deregister_instances_from_load_balancer(
-      load_balancer_name: elb_name,
-      instances: instance_input
-    )
-    @property_hash[:ensure] = :absent
+    instance_input
   end
 end
