@@ -1,4 +1,4 @@
-Puppet::Type.newtype(:route53_zone) do
+Puppet::Type.newtype(:route53_public_zone) do
   @doc = 'Type representing an Route53 DNS zone.'
 
   ensurable
